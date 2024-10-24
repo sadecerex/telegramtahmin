@@ -1,4 +1,5 @@
 import requests
+import random
 from telegram import Bot
 from telegram.ext import Updater
 from config import API_KEY, TELEGRAM_TOKEN, GROUP_CHAT_ID, RAPIDAPI_HOST
@@ -43,24 +44,28 @@ def analyze_live_match(match):
     # İlk yarı tahminleri
     if minute < 45:
         if total_goals >= 2:
-            half_time_prediction = "İY 3,5 ÜST (İlk yarı en az 3 gol olur)"
-            confidence_level = "yüksek"
+            if random.choice([True, False]):
+                half_time_prediction = "İY 3,5 ÜST (İlk yarı en az 3 gol olur)"
+                confidence_level = "yüksek"
+            else:
+                half_time_prediction = "İY 2,5 ÜST (İlk yarı en az 2 gol olur)"
+                confidence_level = random.choice(["yüksek", "orta"])
         elif total_goals == 1:
             if home_score == 1 and away_score == 0:
-                half_time_prediction = f"İY {home_team} kazanır (Ev sahibi önde)"
-                confidence_level = "yüksek"
+                half_time_prediction = random.choice([f"İY {home_team} kazanır (Ev sahibi önde)", "İY 1,5 ÜST (Bir gol daha olabilir)"])
+                confidence_level = random.choice(["yüksek", "orta"])
             elif home_score == 0 and away_score == 1:
-                half_time_prediction = f"İY {away_team} kazanır (Misafir önde)"
-                confidence_level = "yüksek"
+                half_time_prediction = random.choice([f"İY {away_team} kazanır (Misafir önde)", "İY 1,5 ÜST (Bir gol daha olabilir)"])
+                confidence_level = random.choice(["yüksek", "orta"])
             elif home_score == 1 and away_score == 1:
-                half_time_prediction = "İY 0,5 ÜST (Bir gol olabilir)"
-                confidence_level = "orta"
+                half_time_prediction = random.choice(["İY 0,5 ÜST (Bir gol olabilir)", "İY 1,5 ÜST (Bir gol daha olabilir)"])
+                confidence_level = random.choice(["orta", "düşük"])
             else:
-                half_time_prediction = "İY 0,5 ALT (Gol olmayabilir)"
-                confidence_level = "orta"
+                half_time_prediction = random.choice(["İY 0,5 ALT (Gol olmayabilir)", "İY 1,5 ALT (Gol ihtimali düşük)"])
+                confidence_level = random.choice(["orta", "düşük"])
         elif total_goals == 0:
-            half_time_prediction = "İY 0,5 ALT (Gol olmayabilir)"
-            confidence_level = "yüksek"
+            half_time_prediction = random.choice(["İY 0,5 ALT (Gol olmayabilir)", "İY 0,5 ÜST (Bir gol olabilir)"])
+            confidence_level = random.choice(["yüksek", "orta", "düşük"])
 
     # Tüm maç tahminleri
     if minute >= 45:
@@ -96,26 +101,30 @@ def check_prediction_outcome(match):
         home_score = match['goals']['home']
         away_score = match['goals']['away']
         total_goals = home_score + away_score
+
         predicted_half_time = predicted_matches[fixture_id]['half_time_prediction']
         predicted_full_time = predicted_matches[fixture_id]['full_time_prediction']
 
-        # Yarı zaman tahmin kontrolü
-        if predicted_half_time == "3.5 ÜST" and total_goals >= 2:
+        # Maç sonucunu tahminle karşılaştır
+        if predicted_full_time == "MS 5,5 ÜST (Maçta en az 6 gol olur)" and total_goals >= 6:
             return True
-        if predicted_half_time == "0.5 ALT" and total_goals == 0:
+        elif predicted_full_time == "MS 4,5 ÜST (Maçta en az 5 gol olur)" and total_goals >= 5:
+            return True
+        elif predicted_full_time == "MS 3,5 ÜST (Maçta en az 4 gol olur)" and total_goals >= 4:
+            return True
+        elif predicted_full_time == "MS 2,5 ÜST (Maçta en az 3 gol olur)" and total_goals >= 3:
+            return True
+        elif predicted_full_time == "MS 1,5 ÜST (Maçta en az 2 gol olur)" and total_goals >= 2:
+            return True
+        elif predicted_full_time == f"{match['teams']['home']['name']} kazanır (Ev sahibi galip)" and home_score > away_score:
+            return True
+        elif predicted_full_time == f"{match['teams']['away']['name']} kazanır (Misafir galip)" and away_score > home_score:
+            return True
+        elif predicted_full_time == "MS 0,5 ALT (Gol olmayabilir)" and total_goals == 0:
+            return True
+        elif predicted_full_time == "MS 1,5 ALT (Maçta 1 veya daha az gol olur)" and total_goals <= 1:
             return True
 
-        # Maç sonu tahmin kontrolü
-        if predicted_full_time == "5.5 ÜST" and total_goals >= 4:
-            return True
-        if predicted_full_time == "4.5 ÜST" and total_goals >= 3:
-            return True
-        if predicted_full_time == "3.5 ÜST" and total_goals >= 2:
-            return True
-        if predicted_full_time.startswith("KG") and home_score > 0 and away_score > 0:
-            return True
-        if predicted_full_time == "KG" and total_goals == 0:
-            return True
     return False
 
 def send_predictions(context):
@@ -173,16 +182,12 @@ def send_predictions(context):
             if fixture_id in predicted_matches:
                 predicted_matches.pop(fixture_id)
 
-
 def main():
-    updater = Updater(token=TELEGRAM_TOKEN, use_context=True)
+    updater = Updater(TELEGRAM_TOKEN, use_context=True)
     job_queue = updater.job_queue
-
-    # 10 dakikada bir tahmin gönder
-    job_queue.run_repeating(send_predictions, interval=600, first=10)
-
+    job_queue.run_repeating(send_predictions, interval=30, first=0)
     updater.start_polling()
     updater.idle()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
