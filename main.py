@@ -137,7 +137,7 @@ def send_predictions(context):
     max_predictions = 3  # Maksimum 3 maç tahmini yap
 
     for match in live_matches['response']:
-        if predictions_made >= max_predictions:
+        if predictions_made >= max_predictions:  # Eğer tahmin limiti aşıldıysa döngüden çık
             break
 
         fixture_id = match['fixture']['id']
@@ -160,7 +160,7 @@ def send_predictions(context):
 
             # Tahminleri kaydet
             predicted_matches[fixture_id] = {'half_time_prediction': half_time_prediction, 'full_time_prediction': full_time_prediction}
-            predictions_made += 1
+            predictions_made += 1  # Tahmin yapıldı, sayaç arttır
 
         if full_time_prediction and minute >= 45:
             message = (f"⚽ {home_team} - {away_team}\n"
@@ -169,23 +169,29 @@ def send_predictions(context):
                        f"Maç Sonu Tahmin: {full_time_prediction}\n"
                        f"Güven Seviyesi: {confidence_level.upper()}")
             bot.send_message(chat_id=GROUP_CHAT_ID, text=message, timeout=300)
+            predictions_made += 1  # Tahmin yapıldı, sayaç arttır
 
         # Maç 90. dakikayı geçtiyse tahmin sonucunu kontrol et
         if minute >= 90:
-            outcome_correct = check_prediction_outcome(match)
-            if outcome_correct:
-                bot.send_message(chat_id=GROUP_CHAT_ID, text=f"✅ Tahmin tuttu! {home_team} - {away_team}")
-            else:
-                bot.send_message(chat_id=GROUP_CHAT_ID, text=f"❌ Tahmin tutmadı! {home_team} - {away_team}")
+            # Sadece tahmin edilen 3 maçı kontrol etmek için kontrol yapıyoruz
+            if predictions_made > 0:  # Tahmin yapılmış maç varsa sonucu kontrol et
+                outcome_correct = check_prediction_outcome(match)
+                if outcome_correct:
+                    bot.send_message(chat_id=GROUP_CHAT_ID, text=f"✅ Tahmin tuttu! {home_team} - {away_team}")
+                else:
+                    bot.send_message(chat_id=GROUP_CHAT_ID, text=f"❌ Tahmin tutmadı! {home_team} - {away_team}")
 
-            # Tahmin edilen maçı listeden çıkar
-            if fixture_id in predicted_matches:
-                predicted_matches.pop(fixture_id)
+                # Tahmin edilen maçı listeden çıkar
+                if fixture_id in predicted_matches:
+                    predicted_matches.pop(fixture_id)
+
+                predictions_made -= 1  # Tahmin sonuç kontrolü yapıldıktan sonra sayaç azaltılır
+
 
 def main():
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
     job_queue = updater.job_queue
-    job_queue.run_repeating(send_predictions, interval=30, first=0)
+    job_queue.run_repeating(send_predictions, interval=1200, first=0)  # 20 dakikada bir tahmin yap
     updater.start_polling()
     updater.idle()
 
