@@ -21,9 +21,13 @@ def get_live_matches():
         response.raise_for_status()
         data = response.json()
 
-        if 'response' not in data:
-            print(f"Error: API response does not contain 'response' key. Full response: {data}")
+        # Debug: API yanıtını yazdır
+        print(f"Live matches data: {data}")
+
+        if 'response' not in data or not data['response']:
+            print("Şu anda canlı maç yok.")
             return None
+
         return data
 
     except requests.exceptions.RequestException as e:
@@ -60,9 +64,6 @@ def analyze_live_match(match):
             elif home_score == 1 and away_score == 1:
                 half_time_prediction = random.choice(["İY 0,5 ÜST (Bir gol olabilir)", "İY 1,5 ÜST (Bir gol daha olabilir)"])
                 confidence_level = random.choice(["orta", "düşük"])
-            else:
-                half_time_prediction = random.choice(["İY 0,5 ALT (Gol olmayabilir)", "İY 1,5 ALT (Gol ihtimali düşük)"])
-                confidence_level = random.choice(["orta", "düşük"])
         elif total_goals == 0:
             half_time_prediction = random.choice(["İY 0,5 ALT (Gol olmayabilir)", "İY 0,5 ÜST (Bir gol olabilir)"])
             confidence_level = random.choice(["yüksek", "orta", "düşük"])
@@ -89,9 +90,12 @@ def analyze_live_match(match):
             elif away_score > home_score:
                 full_time_prediction = f"{away_team} kazanır (Misafir galip)"
                 confidence_level = "yüksek"
-            else:
-                full_time_prediction = "MS 0,5 ALT (Gol olmayabilir)"
-                confidence_level = "yüksek"
+        else:
+            full_time_prediction = "MS 0,5 ALT (Gol olmayabilir)"
+            confidence_level = "yüksek"
+
+    # Debug: Tahmin ve maç bilgilerini yazdır
+    print(f"Tahmin: {half_time_prediction}, Full Time: {full_time_prediction}, Skor: {home_score} - {away_score}, Dakika: {minute}")
 
     return half_time_prediction, full_time_prediction, home_team, away_team, home_score, away_score, minute, confidence_level
 
@@ -102,7 +106,6 @@ def check_prediction_outcome(match):
         away_score = match['goals']['away']
         total_goals = home_score + away_score
 
-        predicted_half_time = predicted_matches[fixture_id]['half_time_prediction']
         predicted_full_time = predicted_matches[fixture_id]['full_time_prediction']
 
         # Maç sonucunu tahminle karşılaştır
@@ -156,11 +159,15 @@ def send_predictions(context):
                        f"Şimdiki skor {home_score} - {away_score}\n"
                        f"İlk Yarı Tahmin: {half_time_prediction}\n"
                        f"Güven Seviyesi: {confidence_level.upper()}")
-            bot.send_message(chat_id=GROUP_CHAT_ID, text=message, timeout=300)
-
+            print(f"Mesaj gönderiliyor: {message}")
+            try:
+                response = bot.send_message(chat_id=GROUP_CHAT_ID, text=message)
+                print(f"Telegram yanıtı: {response}")
+            except Exception as e:
+                print(f"Telegram mesaj gönderim hatası: {e}")
             # Tahminleri kaydet
             predicted_matches[fixture_id] = {'half_time_prediction': half_time_prediction, 'full_time_prediction': full_time_prediction}
-            predictions_made += 1  # Tahmin yapıldı, sayaç arttır
+            predictions_made += 1
 
         if full_time_prediction and minute >= 45:
             message = (f"⚽ {home_team} - {away_team}\n"
@@ -168,30 +175,24 @@ def send_predictions(context):
                        f"Şimdiki skor {home_score} - {away_score}\n"
                        f"Maç Sonu Tahmin: {full_time_prediction}\n"
                        f"Güven Seviyesi: {confidence_level.upper()}")
-            bot.send_message(chat_id=GROUP_CHAT_ID, text=message, timeout=300)
-            predictions_made += 1  # Tahmin yapıldı, sayaç arttır
+            print(f"Mesaj gönderiliyor: {message}")
+            try:
+                response = bot.send_message(chat_id=GROUP_CHAT_ID, text=message)
+                print(f"Telegram yanıtı: {response}")
+            except Exception as e:
+                print(f"Telegram mesaj gönderim hatası: {e}")
+            # Tahminleri kaydet
+            predicted_matches[fixture_id] = {'half_time_prediction': half_time_prediction, 'full_time_prediction': full_time_prediction}
+            predictions_made += 1
 
-        # Maç 90. dakikayı geçtiyse tahmin sonucunu kontrol et
-        if minute >= 90:
-            # Sadece tahmin edilen 3 maçı kontrol etmek için kontrol yapıyoruz
-            if predictions_made > 0:  # Tahmin yapılmış maç varsa sonucu kontrol et
-                outcome_correct = check_prediction_outcome(match)
-                if outcome_correct:
-                    bot.send_message(chat_id=GROUP_CHAT_ID, text=f"✅ Tahmin tuttu! {home_team} - {away_team}")
-                else:
-                    bot.send_message(chat_id=GROUP_CHAT_ID, text=f"❌ Tahmin tutmadı! {home_team} - {away_team}")
-
-                # Tahmin edilen maçı listeden çıkar
-                if fixture_id in predicted_matches:
-                    predicted_matches.pop(fixture_id)
-
-                predictions_made -= 1  # Tahmin sonuç kontrolü yapıldıktan sonra sayaç azaltılır
-
-
+# Telegram bot zamanlayıcı
 def main():
-    updater = Updater(TELEGRAM_TOKEN, use_context=True)
-    job_queue = updater.job_queue
-    job_queue.run_repeating(send_predictions, interval=1200, first=0)  # 20 dakikada bir tahmin yap
+    updater = Updater(token=TELEGRAM_TOKEN, use_context=True)
+    job = updater.job_queue
+
+    # 20 dakikada bir tahmin gönder
+    job.run_repeating(send_predictions, interval=20 * 60, first=0)
+
     updater.start_polling()
     updater.idle()
 
