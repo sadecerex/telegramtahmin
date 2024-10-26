@@ -21,7 +21,6 @@ def get_live_matches():
         response.raise_for_status()
         data = response.json()
 
-        # Debug: API yanıtını yazdır
         print(f"Live matches data: {data}")
 
         if 'response' not in data or not data['response']:
@@ -45,7 +44,6 @@ def analyze_live_match(match):
     half_time_prediction = ""
     full_time_prediction = ""
 
-    # İlk yarı tahminleri
     if minute < 45:
         if total_goals >= 2:
             if random.choice([True, False]):
@@ -68,7 +66,6 @@ def analyze_live_match(match):
             half_time_prediction = random.choice(["İY 0,5 ALT (Gol olmayabilir)", "İY 0,5 ÜST (Bir gol olabilir)"])
             confidence_level = random.choice(["yüksek", "orta", "düşük"])
 
-    # Tüm maç tahminleri
     if minute >= 45:
         if total_goals >= 4:
             full_time_prediction = "MS 5,5 ÜST (Maçta en az 6 gol olur)"
@@ -94,7 +91,6 @@ def analyze_live_match(match):
             full_time_prediction = "MS 0,5 ALT (Gol olmayabilir)"
             confidence_level = "yüksek"
 
-    # Debug: Tahmin ve maç bilgilerini yazdır
     print(f"Tahmin: {half_time_prediction}, Full Time: {full_time_prediction}, Skor: {home_score} - {away_score}, Dakika: {minute}")
 
     return half_time_prediction, full_time_prediction, home_team, away_team, home_score, away_score, minute, confidence_level
@@ -102,33 +98,79 @@ def analyze_live_match(match):
 def check_prediction_outcome(match):
     fixture_id = match['fixture']['id']
     if fixture_id in predicted_matches:
+        home_team = match['teams']['home']['name']
+        away_team = match['teams']['away']['name']
+        home_score = match['goals']['home']
+        away_score = match['goals']['away']
+        total_goals = home_score + away_score
+        minute = match['fixture']['status']['elapsed']
+
+        # Tahminler
+        predicted_half_time = predicted_matches[fixture_id]['half_time_prediction']
+        predicted_full_time = predicted_matches[fixture_id]['full_time_prediction']
+
+        # İlk yarı tahminlerinin kontrolü
+        if minute < 45:
+            if predicted_half_time == "İY 3,5 ÜST (İlk yarı en az 3 gol olur)" and total_goals >= 4:
+                return True
+            elif predicted_half_time == "İY 2,5 ÜST (İlk yarı en az 2 gol olur)" and total_goals >= 3:
+                return True
+            elif predicted_half_time == "İY 1,5 ÜST (Bir gol daha olabilir)" and total_goals >= 2:
+                return True
+            elif predicted_half_time == "İY 0,5 ÜST (Bir gol olabilir)" and total_goals >= 1:
+                return True
+            elif predicted_half_time == f"İY {home_team} kazanır (Ev sahibi önde)" and home_score > away_score:
+                return True
+            elif predicted_half_time == f"İY {away_team} kazanır (Misafir önde)" and away_score > home_score:
+                return True
+            elif predicted_half_time == "İY 0,5 ALT (Gol olmayabilir)" and total_goals == 0:
+                return True
+
+        # Maç sonu tahminlerinin kontrolü
+        if minute >= 45:
+            if predicted_full_time == "MS 5,5 ÜST (Maçta en az 6 gol olur)" and total_goals >= 6:
+                return True
+            elif predicted_full_time == "MS 4,5 ÜST (Maçta en az 5 gol olur)" and total_goals >= 5:
+                return True
+            elif predicted_full_time == "MS 3,5 ÜST (Maçta en az 4 gol olur)" and total_goals >= 4:
+                return True
+            elif predicted_full_time == "MS 2,5 ÜST (Maçta en az 3 gol olur)" and total_goals >= 3:
+                return True
+            elif predicted_full_time == "MS 1,5 ÜST (En az 2 gol olur)" and total_goals >= 2:
+                return True
+            elif predicted_full_time == f"{home_team} kazanır (Ev sahibi galip)" and home_score > away_score:
+                return True
+            elif predicted_full_time == f"{away_team} kazanır (Misafir galip)" and away_score > home_score:
+                return True
+            elif predicted_full_time == "MS 0,5 ALT (Gol olmayabilir)" and total_goals == 0:
+                return True
+            elif predicted_full_time == "MS 1,5 ALT (Maçta 1 veya daha az gol olur)" and total_goals <= 1:
+                return True
+
+    return False
+
+
+def truechecker(match):
+    fixture_id = match['fixture']['id']
+    if fixture_id in predicted_matches:
+        home_team = match['teams']['home']['name']
+        away_team = match['teams']['away']['name']
         home_score = match['goals']['home']
         away_score = match['goals']['away']
         total_goals = home_score + away_score
 
-        predicted_full_time = predicted_matches[fixture_id]['full_time_prediction']
+        is_prediction_correct = check_prediction_outcome(match)
 
-        # Maç sonucunu tahminle karşılaştır
-        if predicted_full_time == "MS 5,5 ÜST (Maçta en az 6 gol olur)" and total_goals >= 6:
-            return True
-        elif predicted_full_time == "MS 4,5 ÜST (Maçta en az 5 gol olur)" and total_goals >= 5:
-            return True
-        elif predicted_full_time == "MS 3,5 ÜST (Maçta en az 4 gol olur)" and total_goals >= 4:
-            return True
-        elif predicted_full_time == "MS 2,5 ÜST (Maçta en az 3 gol olur)" and total_goals >= 3:
-            return True
-        elif predicted_full_time == "MS 1,5 ÜST (Maçta en az 2 gol olur)" and total_goals >= 2:
-            return True
-        elif predicted_full_time == f"{match['teams']['home']['name']} kazanır (Ev sahibi galip)" and home_score > away_score:
-            return True
-        elif predicted_full_time == f"{match['teams']['away']['name']} kazanır (Misafir galip)" and away_score > home_score:
-            return True
-        elif predicted_full_time == "MS 0,5 ALT (Gol olmayabilir)" and total_goals == 0:
-            return True
-        elif predicted_full_time == "MS 1,5 ALT (Maçta 1 veya daha az gol olur)" and total_goals <= 1:
-            return True
+        if is_prediction_correct:
+            message = f"✅ Tahmin Tuttu - {home_team} {home_score} - {away_team} {away_score}"
+        else:
+            message = f"❌ Tahmin Tutmadı - {home_team} {home_score} - {away_team} {away_score}"
 
-    return False
+        try:
+            response = bot.send_message(chat_id=GROUP_CHAT_ID, text=message)
+            print(f"Telegram yanıtı: {response}")
+        except Exception as e:
+            print(f"Telegram mesaj gönderim hatası: {e}")
 
 def send_predictions(context):
     live_matches = get_live_matches()
@@ -136,21 +178,20 @@ def send_predictions(context):
         print("Şu anda canlı oynanan maç yok.")
         return
 
-    predictions_made = 0  # Tahmin sayısını takip etmek için
-    max_predictions = 3  # Maksimum 3 maç tahmini yap
+    predictions_made = 0
+    max_predictions = 3
 
     for match in live_matches['response']:
-        if predictions_made >= max_predictions:  # Eğer tahmin limiti aşıldıysa döngüden çık
+        if predictions_made >= max_predictions:
             break
 
         fixture_id = match['fixture']['id']
         minute = match['fixture']['status']['elapsed']
 
-        # Eğer maç için zaten tahmin yapıldıysa, tekrar tahmin yapma
         if fixture_id in predicted_matches:
+            truechecker(match)
             continue
 
-        # 8 değer döndüğü için tüm değerleri alıyoruz
         half_time_prediction, full_time_prediction, home_team, away_team, home_score, away_score, minute, confidence_level = analyze_live_match(match)
 
         if half_time_prediction and minute < 45:
@@ -165,7 +206,6 @@ def send_predictions(context):
                 print(f"Telegram yanıtı: {response}")
             except Exception as e:
                 print(f"Telegram mesaj gönderim hatası: {e}")
-            # Tahminleri kaydet
             predicted_matches[fixture_id] = {'half_time_prediction': half_time_prediction, 'full_time_prediction': full_time_prediction}
             predictions_made += 1
 
@@ -181,9 +221,9 @@ def send_predictions(context):
                 print(f"Telegram yanıtı: {response}")
             except Exception as e:
                 print(f"Telegram mesaj gönderim hatası: {e}")
-            # Tahminleri kaydet
             predicted_matches[fixture_id] = {'half_time_prediction': half_time_prediction, 'full_time_prediction': full_time_prediction}
             predictions_made += 1
+
 
 # Telegram bot zamanlayıcı
 def main():
